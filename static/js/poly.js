@@ -184,7 +184,7 @@ function circIfIn (point, poly) {
       var detectionPoint = point.destinationPoint(radial, 0.07); // todo: fix hardcoded 70m
       if (google.maps.geometry.poly.containsLocation(detectionPoint, poly)) {
         // edge point directly in poly, cool, do it
-        poly.circles.push(drawScanCircle(point, '#0000ff'))
+        poly.circles.push(drawScanCircle(point, '#00ff00'))
         return
       }
     }
