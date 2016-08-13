@@ -29,6 +29,20 @@ def verify_config_file_exists(filename):
         shutil.copy2(fullpath + '.example', fullpath)
 
 
+def memoize(function):
+    memo = {}
+
+    def wrapper(*args):
+        if args in memo:
+            return memo[args]
+        else:
+            rv = function(*args)
+            memo[args] = rv
+            return rv
+    return wrapper
+
+
+@memoize
 def get_args():
     # fuck PEP8
     configpath = os.path.join(os.path.dirname(__file__), '../config/config.ini')
@@ -108,6 +122,7 @@ def get_args():
     parser.add_argument('-pd', '--purge-data',
                         help='Clear pokemon from database this many hours after they disappear \
                         (0 to disable)', type=int, default=0)
+    parser.add_argument('-px', '--proxy', help='Proxy url (e.g. socks5://127.0.0.1:9050)')
     parser.add_argument('--db-type', help='Type of database to be used (default: sqlite)',
                         default='sqlite')
     parser.add_argument('--db-name', help='Name of the database to be used')
@@ -126,7 +141,7 @@ def get_args():
     if args.only_server:
         if args.location is None:
             parser.print_usage()
-            print sys.argv[0] + ': error: arguments -l/--location is required'
+            print(sys.argv[0] + ": error: arguments -l/--location is required")
             sys.exit(1)
     else:
         errors = []
@@ -164,7 +179,7 @@ def get_args():
 
         if len(errors) > 0:
             parser.print_usage()
-            print sys.argv[0] + ": errors: \n - " + "\n - ".join(errors)
+            print(sys.argv[0] + ": errors: \n - " + "\n - ".join(errors))
             sys.exit(1)
 
         # Fill the pass/auth if set to a single value
@@ -218,7 +233,6 @@ def insert_mock_data(position):
                         last_modified=datetime.now(),
                         # Every other pokestop be lured
                         lure_expiration=disappear_time if (i % 2 == 0) else None,
-                        active_pokemon_id=i
                         )
 
     for i in range(1, num_gym):

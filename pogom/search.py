@@ -18,8 +18,10 @@ Search Architecture:
 '''
 
 import logging
-import time
 import math
+import random
+import time
+
 
 from threading import Thread, Lock
 from queue import Queue, Empty
@@ -178,7 +180,12 @@ def search_worker_thread(args, account, search_items_queue, parse_lock, encrypti
 
     # If we have more than one account, stagger the logins such that they occur evenly over scan_delay
     if len(args.accounts) > 1:
-        delay = (args.scan_delay / len(args.accounts)) * args.accounts.index(account)
+        if len(args.accounts) > args.scan_delay:  # force ~1 second delay between threads if you have many accounts
+            delay = args.accounts.index(account) \
+                + ((random.random() - .5) / 2) if args.accounts.index(account) > 0 else 0
+        else:
+            delay = (args.scan_delay / len(args.accounts)) * args.accounts.index(account)
+
         log.debug('Delaying thread startup for %.2f seconds', delay)
         time.sleep(delay)
 
@@ -191,6 +198,8 @@ def search_worker_thread(args, account, search_items_queue, parse_lock, encrypti
 
             # Create the API instance this will use
             api = PGoApi()
+            if args.proxy:
+                api.set_proxy({'http': args.proxy, 'https': args.proxy})
 
             # Get current time
             loop_start_time = int(round(time.time() * 1000))
@@ -247,7 +256,7 @@ def search_worker_thread(args, account, search_items_queue, parse_lock, encrypti
                             search_items_queue.task_done()
                             break  # All done, get out of the request-retry loop
                         except KeyError:
-                            log.exception('Search step %s map parsing failed, retrying request in %g seconds', step, sleep_time)
+                            log.exception('Search step %s map parsing failed, retrying request in %g seconds. Username: %s', step, sleep_time, account['username'])
                             failed_total += 1
                             time.sleep(sleep_time)
 
@@ -261,7 +270,7 @@ def search_worker_thread(args, account, search_items_queue, parse_lock, encrypti
 
         # catch any process exceptions, log them, and continue the thread
         except Exception as e:
-            log.exception('Exception in search_worker: %s', e)
+            log.exception('Exception in search_worker: %s. Username: %s', e, account['username'])
 
 
 def check_login(args, account, api, position):
