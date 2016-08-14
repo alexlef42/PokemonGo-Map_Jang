@@ -10,10 +10,11 @@
   <body>
     <div id="info">
         <h1>PokemonGo-Map Coverage</h1>
-        <p>Draw polygons on the map, get location coords</p>
-        <p>Polylist:<p>
+        <p>Draw polygons to define pokemon scan areas, and place markers to setup Gym/Pokesop scanner locations. <br/><br/>Copy the "simple config" so you can <a href="#" id="import">restore your map</a>. The "App Config" goes into config.ini.</p>
+        <p></p>
+        <p>Simple Config:<p>
         <code id="polylist"></code>
-        <p>Coords:</p>
+        <p>App Config:</p>
         <code id="coordlist"></code>
     </div>
     <div id="map"></div>
@@ -23,7 +24,9 @@
       var centerLat = {{lat}};
       var centerLng = {{lng}};
     </script>
+    <!-- for quicker development, flip the comments on these two lines -->
     <script src="{{ url_for('static', filename='dist/js/poly.min.js').lstrip('/') }}"></script>
+    <!--<script src="static/js/poly.js"></script>-->
     <script src="https://maps.googleapis.com/maps/api/js?key={{ gmaps_key }}&amp;callback=initMap&amp;libraries=places,geometry,drawing"></script>
   </body>
 </html>
