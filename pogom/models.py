@@ -190,17 +190,27 @@ class Pokemon(BaseModel):
         return appearances
 
     @classmethod
-    def get_spawnpoints(cls, swLat, swLng, neLat, neLng):
+    def hex_bounds(cls, center, steps):
+        # Make a box that is (70m * step_limit * 2) + 70m away from the center point
+        # Rationale is that you need to travel
+        sp_dist = 0.07 * 2 * args.step_limit
+        n = get_new_coords(center, sp_dist, 0)
+        e = get_new_coords(center, sp_dist, 90)
+        s = get_new_coords(center, sp_dist, 180)
+        w = get_new_coords(center, sp_dist, 270)
+        return (n, s, e, w)
+
+    @classmethod
+    def get_spawnpoints(cls, southBoundary, westBoundary, northBoundary, eastBoundary):
         query = Pokemon.select(Pokemon.latitude, Pokemon.longitude, Pokemon.spawnpoint_id)
 
         if None not in (swLat, swLng, neLat, neLng):
             query = (query
-                     .where((Pokemon.latitude >= swLat) &
-                            (Pokemon.longitude >= swLng) &
-                            (Pokemon.latitude <= neLat) &
-                            (Pokemon.longitude <= neLng)
-                            )
-                     )
+                     .where((Pokemon.latitude <= northBoundary) &
+                            (Pokemon.latitude >= southBoundary) &
+                            (Pokemon.longitude >= westBoundary) &
+                            (Pokemon.longitude <= eastBoundary)
+                            ))
 
         # Sqlite doesn't support distinct on columns
         if args.db_type == 'mysql':
@@ -212,28 +222,20 @@ class Pokemon(BaseModel):
 
     @classmethod
     def get_spawnpoints_in_hex(cls, center, steps):
-        log.info('got {}steps'.format(steps))
-        # work out hex bounding box
-        hdist = ((steps * 120.0) - 50.0) / 1000.0
-        vdist = ((steps * 105.0) - 35.0) / 1000.0
-        R = 6378.1  # km radius of the earth
-        vang = math.degrees(vdist / R)
-        hang = math.degrees(hdist / (R * math.cos(math.radians(center[0]))))
-        north = center[0] + vang
-        south = center[0] - vang
-        east = center[1] + hang
-        west = center[1] - hang
-        # get all spawns in that box
+        log.info('Finding spawn points {} steps away'.format(steps))
+
+        n, e, s, w = self.hex_bounds(center, steps)
+
         query = (Pokemon
                  .select(Pokemon.latitude.alias('lat'),
                          Pokemon.longitude.alias('lng'),
                          ((Pokemon.disappear_time.minute * 60) + Pokemon.disappear_time.second).alias('time'),
                          Pokemon.spawnpoint_id
                          ))
-        query = (query.where((Pokemon.latitude <= north) &
-                             (Pokemon.latitude >= south) &
-                             (Pokemon.longitude >= west) &
-                             (Pokemon.longitude <= east)
+        query = (query.where((Pokemon.latitude  <= n) &
+                             (Pokemon.latitude  >= s) &
+                             (Pokemon.longitude >= w) &
+                             (Pokemon.longitude <= e)
                              ))
         # Sqlite doesn't support distinct on columns
         if args.db_type == 'mysql':
@@ -242,24 +244,16 @@ class Pokemon(BaseModel):
             query = query.group_by(Pokemon.spawnpoint_id)
 
         s = list(query.dicts())
-        # for each spawn work out if it is in the hex (clipping the diagonals)
-        trueSpawns = []
-        for spawn in s:
-            spawn['time'] = (spawn['time'] + 2700) % 3600
-            # get the offset from the center of each spawn in km
-            offset = [math.radians(spawn['lat'] - center[0]) * R, math.radians(spawn['lng'] - center[1]) * (R * math.cos(math.radians(center[0])))]
-            # check agains the 4 lines that make up the diagonals
-            if (offset[1] + (offset[0] * 0.5)) > hdist:  # too far ne
-                continue
-            if (offset[1] - (offset[0] * 0.5)) > hdist:  # too far se
-                continue
-            if ((offset[0] * 0.5) - offset[1]) > hdist:  # too far nw
-                continue
-            if ((0 - offset[1]) - (offset[0] * 0.5)) > hdist:  # too far sw
-                continue
-            # if it gets to here its  a good spawn
-            trueSpawns.append(spawn)
-        return trueSpawns
+
+        filtered = []
+        # Filter to spawns which actually fall in the hex locations
+        hex_locations = list(generate_location_steps(current_location, steps, 0.07))
+        for hl in hex_locations:
+            for idx, sp in s:
+                if geopy.distance.distance(hl, (sp['lat'],sp['lng'])).meters <= 70:
+                    filtered.push(s.pop(idx))
+
+        return filtered
 
 
 class Pokestop(BaseModel):

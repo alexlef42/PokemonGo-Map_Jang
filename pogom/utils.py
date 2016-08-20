@@ -70,8 +70,8 @@ def get_args():
     parser.add_argument('-lr', '--login-retries',
                         help='Number of logins attempts before refreshing a thread',
                         type=int, default=3)
-    parser.add_argument('-sr', '--scan-retries',
-                        help='Number of retries for a given scan cell',
+    parser.add_argument('-mf', '--max-failures',
+                        help='Maximum number of failures to parse locations before an account will go into a two hour sleep',
                         type=int, default=5)
     parser.add_argument('-dc', '--display-in-console',
                         help='Display Found Pokemon in Console',
