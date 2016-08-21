@@ -409,7 +409,7 @@ def search_worker_thread(args, account, search_items_queue, pause_bit, encryptio
             while True:
 
                 # If this account has been messing up too hard, let it rest
-                if status['fail'] > args.max_failures:
+                if status['fail'] >= args.max_failures:
                     end_sleep = now() + (3600 * 2)
                     long_sleep_started = time.strftime('%H:%M')
                     while now() < end_sleep:
@@ -469,7 +469,7 @@ def search_worker_thread(args, account, search_items_queue, pause_bit, encryptio
                 # G'damnit, nothing back. Mark it up, sleep, carry on
                 if not response_dict:
                     status['fail'] += 1
-                    status['message'] = 'Invalid response at {},{}, abandoning location'.format(status['fail'], step_location[0], step_location[1])
+                    status['message'] = 'Invalid response at {},{}, abandoning location'.format(step_location[0], step_location[1])
                     log.error(status['message'])
                     time.sleep(args.scan_delay)
                     continue
