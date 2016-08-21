@@ -446,9 +446,10 @@ def search_worker_thread(args, account, search_items_queue, pause_bit, encryptio
                 if leaves and time.time() > leaves:
                     search_items_queue.task_done()
                     status['skip'] += 1
+                    # it is slightly silly to put this in status['message'] since it'll be overwritten very shortly after. Oh well.
                     status['message'] = 'Too late for location {},{}; skipping'.format(step_location[0], step_location[1])
                     log.info(status['message'])
-                    time.sleep(args.scan_delay)
+                    # No sleep here; we've not done anything worth sleeping for. Plus we clearly need to catch up!
                     continue
 
                 status['message'] = 'Searching at {},{}'.format(step_location[0], step_location[1])
