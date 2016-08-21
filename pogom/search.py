@@ -131,7 +131,7 @@ def status_printer(threadStatus, search_items_queue, db_updates_queue, wh_queue)
                     userlen = max(userlen, len(threadStatus[item]['user']))
 
             # How pretty
-            status = '{:10} | {:'+str(userlen)+'} | {:7} | {:6} | {:5} | {:7} | {:10}'
+            status = '{:10} | {:' + str(userlen) + '} | {:7} | {:6} | {:5} | {:7} | {:10}'
 
             # Print the worker status
             status_text.append(status.format('Worker ID', 'User', 'Success', 'Failed', 'Empty', 'Skipped', 'Message'))
@@ -351,7 +351,7 @@ def get_sps_location_list(args, current_location):
             appears = time.time() + 3600 - late_by
 
         location['appears'] = appears
-        location['leaves']  = appears + 900
+        location['leaves'] = appears + 900
 
     # Put the spawn points in order of next appearance time
     locations.sort(key=itemgetter('appears'))
@@ -399,7 +399,7 @@ def search_worker_thread(args, account, search_items_queue, pause_bit, encryptio
                     end_sleep = time.time() + (3600 * 2)
                     long_sleep_started = time.strftime('%H:%M')
                     while time.time() < end_sleep:
-                        status['message'] = 'Account "{}" has failed more than {} scans; possibly banned account. Sleeping for 2 hour sleep as of {}'.format(account['username'], max_failures, long_sleep_started)
+                        status['message'] = 'Account "{}" has failed more than {} scans; possibly banned account. Sleeping for 2 hour sleep as of {}'.format(account['username'], args.max_failures, long_sleep_started)
                         log.error(status['message'])
                         time.sleep(300)
                     break  # exit this loop to have the API recreated
@@ -451,7 +451,7 @@ def search_worker_thread(args, account, search_items_queue, pause_bit, encryptio
                 # G'damnit, nothing back. Mark it up, sleep, carry on
                 if not response_dict:
                     status['fail'] += 1
-                    status['message'] = 'Invalid response at {},{}, abandoning location'.format(failed_total, step_location[0], step_location[1], sleep_time)
+                    status['message'] = 'Invalid response at {},{}, abandoning location'.format(status['fail'], step_location[0], step_location[1])
                     log.error(status['message'])
                     time.sleep(args.scan_delay)
                     continue

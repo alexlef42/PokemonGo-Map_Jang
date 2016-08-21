@@ -4,7 +4,6 @@ import logging
 import calendar
 import sys
 import time
-import math
 import geopy
 from peewee import SqliteDatabase, InsertQuery, \
     IntegerField, CharField, DoubleField, BooleanField, \
@@ -222,8 +221,8 @@ class Pokemon(BaseModel):
                          ((Pokemon.disappear_time.minute * 60) + Pokemon.disappear_time.second).alias('time'),
                          Pokemon.spawnpoint_id
                          ))
-        query = (query.where((Pokemon.latitude  <= n) &
-                             (Pokemon.latitude  >= s) &
+        query = (query.where((Pokemon.latitude <= n) &
+                             (Pokemon.latitude >= s) &
                              (Pokemon.longitude >= w) &
                              (Pokemon.longitude <= e)
                              ))
@@ -242,7 +241,7 @@ class Pokemon(BaseModel):
         hex_locations = list(generate_location_steps(center, steps, 0.07))
         for hl in hex_locations:
             for idx, sp in enumerate(s):
-                if geopy.distance.distance(hl, (sp['lat'],sp['lng'])).meters <= 70:
+                if geopy.distance.distance(hl, (sp['lat'], sp['lng'])).meters <= 70:
                     filtered.append(s.pop(idx))
 
         return filtered
