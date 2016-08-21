@@ -38,6 +38,8 @@ from pgoapi.exceptions import AuthException
 from .models import parse_map, Pokemon, hex_bounds
 from .transform import generate_location_steps
 from .fakePogoApi import FakePogoApi
+from .utils import now
+
 import terminalsize
 
 log = logging.getLogger(__name__)
@@ -356,11 +358,11 @@ def get_sps_location_list(args, current_location, sps_scan_current):
         if cursec > cur_sec():
             # hasn't spawn in the current hour
             from_now = location['time'] - cur_sec()
-            appears = time.time() + from_now
+            appears = now() + from_now
         else:
             # won't spawn till next hour
             late_by = cur_sec() - location['time']
-            appears = time.time() + 3600 - late_by
+            appears = now() + 3600 - late_by
 
         location['appears'] = appears
         location['leaves'] = appears + 900
@@ -408,9 +410,9 @@ def search_worker_thread(args, account, search_items_queue, pause_bit, encryptio
 
                 # If this account has been messing up too hard, let it rest
                 if status['fail'] > args.max_failures:
-                    end_sleep = time.time() + (3600 * 2)
+                    end_sleep = now() + (3600 * 2)
                     long_sleep_started = time.strftime('%H:%M')
-                    while time.time() < end_sleep:
+                    while now() < end_sleep:
                         status['message'] = 'Account "{}" has failed more than {} scans; possibly banned account. Sleeping for 2 hour sleep as of {}'.format(account['username'], args.max_failures, long_sleep_started)
                         log.error(status['message'])
                         time.sleep(300)
@@ -425,14 +427,14 @@ def search_worker_thread(args, account, search_items_queue, pause_bit, encryptio
                 step, step_location, appears, leaves = search_items_queue.get()
 
                 # too soon?
-                if appears and time.time() < appears + 10:  # adding a 10 second grace period
+                if appears and now() < appears + 10:  # adding a 10 second grace period
                     first_loop = True
                     paused = False
-                    while time.time() < appears + 10:
+                    while now() < appears + 10:
                         if pause_bit.is_set():
                             paused = True
                             break  # why can't python just have `break 2`...
-                        remain = int(appears - time.time() + 10)
+                        remain = appears - now() + 10
                         status['message'] = '{}s early for location {},{}; waiting...'.format(remain, step_location[0], step_location[1])
                         if first_loop:
                             log.info(status['message'])
@@ -443,7 +445,7 @@ def search_worker_thread(args, account, search_items_queue, pause_bit, encryptio
                         continue
 
                 # too late?
-                if leaves and time.time() > leaves:
+                if leaves and now() > leaves:
                     search_items_queue.task_done()
                     status['skip'] += 1
                     # it is slightly silly to put this in status['message'] since it'll be overwritten very shortly after. Oh well.

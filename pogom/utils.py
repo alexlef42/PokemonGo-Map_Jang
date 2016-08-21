@@ -267,6 +267,11 @@ def insert_mock_data(position):
                    )
 
 
+def now():
+    # The fact that you need this helper...
+    return int(time.time())
+
+
 def i8ln(word):
     if config['LOCALE'] == "en":
         return word
