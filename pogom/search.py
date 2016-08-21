@@ -214,6 +214,13 @@ def search_overseer_thread(args, method, new_location_queue, pause_bit, encrypti
     # A place to track the current location
     current_location = False
 
+    # Used to tell SPS to scan for all CURRENT pokemon instead
+    # of, like during a normal loop, just finding the next one
+    # which will appear (since you've already scanned existing
+    # locations in the prior loop)
+    # Needed in a first loop and pausing/changing location.
+    sps_scan_current = True
+
     # The real work starts here but will halt on pause_bit.set()
     while True:
 
@@ -226,11 +233,13 @@ def search_overseer_thread(args, method, new_location_queue, pause_bit, encrypti
                 except Empty:
                     pass
             threadStatus['Overseer']['message'] = 'Scanning is paused'
+            sps_scan_current = True
             time.sleep(1)
 
         # If a new location has been passed to us, get the most recent one
         if not new_location_queue.empty():
             log.info('New location caught, moving search grid')
+            sps_scan_current = True
             try:
                 while True:
                     current_location = new_location_queue.get_nowait()
@@ -254,7 +263,8 @@ def search_overseer_thread(args, method, new_location_queue, pause_bit, encrypti
             if method == 'hex':
                 locations = get_hex_location_list(args, current_location)
             else:
-                locations = get_sps_location_list(args, current_location)
+                locations = get_sps_location_list(args, current_location, sps_scan_current)
+                sps_scan_current = False
 
             if len(locations) == 0:
                 log.warning('Nothing to scan!')
@@ -303,7 +313,7 @@ def get_hex_location_list(args, current_location):
     return locationsZeroed
 
 
-def get_sps_location_list(args, current_location):
+def get_sps_location_list(args, current_location, sps_scan_current):
     locations = []
 
     # Attempt to load spawns from file
@@ -332,16 +342,18 @@ def get_sps_location_list(args, current_location):
 
     log.info('Total of %d spawns to track', len(locations))
 
-    # at this point, 'time' is DISAPPEARANCE time, we're going to morph it to APPEARANCE time
+    # 'time' from json and db alike has been munged to appearance time as seconds after the hour
+    # Here we'll convert that to a real timestamp
     for location in locations:
-        # examples: time    shifted
-        #           0       (   0 + 2700) = 2700 % 3600 = 2700 (0th minute to 45th minute, 15 minutes prior to appearance as time wraps around the hour)
-        #           1800    (1800 + 2700) = 4500 % 3600 =  900 (30th minute, moved to arrive at 15th minute)
-        # todo: this DOES NOT ACCOUNT for pokemons that appear sooner and live longer, but you'll _always_ have at least 15 minutes, so it works well enough
-        location['time'] = (location['time'] + 2700) % 3600
+        # For a scan which should cover all CURRENT pokemon, we can offset
+        # the comparison time by 15 minutes so that the "appears" time
+        # won't be rolled over to the next hour.
+        if sps_scan_current:
+            cursec = (location['time'] + 900) % 3600
+        else:
+            cursec = location['time']
 
-        # Now, lets convert that to the next real unix timestamp since that's a ton easier to work with
-        if location['time'] > cur_sec():
+        if cursec > cur_sec():
             # hasn't spawn in the current hour
             from_now = location['time'] - cur_sec()
             appears = time.time() + from_now
