@@ -14,7 +14,7 @@ Search Architecture:
    - Have a unique API login
    - Listens to the same Queue for areas to scan
    - Can re-login as needed
-   - Shares a global lock for map parsing
+   - Pushes finds to db queue and webhook queue
 '''
 
 import logging
@@ -35,75 +35,14 @@ from pgoapi.utilities import f2i
 from pgoapi import utilities as util
 from pgoapi.exceptions import AuthException
 
-from .models import parse_map, Pokemon
+from .models import parse_map, Pokemon, hex_bounds
+from .transform import generate_location_steps
 from .fakePogoApi import FakePogoApi
 import terminalsize
 
 log = logging.getLogger(__name__)
 
 TIMESTAMP = '\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000'
-
-
-def get_new_coords(init_loc, distance, bearing):
-    """
-    Given an initial lat/lng, a distance(in kms), and a bearing (degrees),
-    this will calculate the resulting lat/lng coordinates.
-    """
-    R = 6378.1  # km radius of the earth
-    bearing = math.radians(bearing)
-
-    init_coords = [math.radians(init_loc[0]), math.radians(init_loc[1])]  # convert lat/lng to radians
-
-    new_lat = math.asin(math.sin(init_coords[0]) * math.cos(distance / R) +
-                        math.cos(init_coords[0]) * math.sin(distance / R) * math.cos(bearing)
-                        )
-
-    new_lon = init_coords[1] + math.atan2(math.sin(bearing) * math.sin(distance / R) * math.cos(init_coords[0]),
-                                          math.cos(distance / R) - math.sin(init_coords[0]) * math.sin(new_lat)
-                                          )
-
-    return [math.degrees(new_lat), math.degrees(new_lon)]
-
-
-def generate_location_steps(initial_loc, step_count, step_distance):
-    # Bearing (degrees)
-    NORTH = 0
-    EAST = 90
-    SOUTH = 180
-    WEST = 270
-
-    pulse_radius = step_distance            # km - radius of players heartbeat is 70m
-    xdist = math.sqrt(3) * pulse_radius   # dist between column centers
-    ydist = 3 * (pulse_radius / 2)          # dist between row centers
-
-    yield (initial_loc[0], initial_loc[1], 0)  # insert initial location
-
-    ring = 1
-    loc = initial_loc
-    while ring < step_count:
-        # Set loc to start at top left
-        loc = get_new_coords(loc, ydist, NORTH)
-        loc = get_new_coords(loc, xdist / 2, WEST)
-        for direction in range(6):
-            for i in range(ring):
-                if direction == 0:  # RIGHT
-                    loc = get_new_coords(loc, xdist, EAST)
-                if direction == 1:  # DOWN + RIGHT
-                    loc = get_new_coords(loc, ydist, SOUTH)
-                    loc = get_new_coords(loc, xdist / 2, EAST)
-                if direction == 2:  # DOWN + LEFT
-                    loc = get_new_coords(loc, ydist, SOUTH)
-                    loc = get_new_coords(loc, xdist / 2, WEST)
-                if direction == 3:  # LEFT
-                    loc = get_new_coords(loc, xdist, WEST)
-                if direction == 4:  # UP + LEFT
-                    loc = get_new_coords(loc, ydist, NORTH)
-                    loc = get_new_coords(loc, xdist / 2, WEST)
-                if direction == 5:  # UP + RIGHT
-                    loc = get_new_coords(loc, ydist, NORTH)
-                    loc = get_new_coords(loc, xdist / 2, EAST)
-                yield (loc[0], loc[1], 0)
-        ring += 1
 
 
 # Apply a location jitter
@@ -116,31 +55,8 @@ def jitterLocation(location=None, maxMeters=10):
 
 
 # gets the current time past the hour
-def curSec():
+def cur_sec():
     return (60 * time.gmtime().tm_min) + time.gmtime().tm_sec
-
-
-# gets the diference between two times past the hour (in a range from -1800 to 1800)
-def timeDif(a, b):
-    dif = a - b
-    if (dif < -1800):
-        dif += 3600
-    if (dif > 1800):
-        dif -= 3600
-    return dif
-
-
-# binary search to get the lowest index of the item in Slist that has atleast time T
-def SbSearch(Slist, T):
-    first = 0
-    last = len(Slist) - 1
-    while first < last:
-        mp = (first + last) // 2
-        if Slist[mp]['time'] < T:
-            first = mp + 1
-        else:
-            last = mp
-    return first
 
 
 # Thread to handle user input
@@ -208,9 +124,19 @@ def status_printer(threadStatus, search_items_queue, db_updates_queue, wh_queue)
             end_line = start_line + usable_height
             current_line = 1
 
+            # longest username
+            userlen = 0
+            for item in threadStatus:
+                if threadStatus[item]['type'] == 'Worker':
+                    userlen = max(userlen, len(threadStatus[item]['user']))
+
+            # How pretty
+            status = '{:10} | {:'+str(userlen)+'} | {:7} | {:6} | {:5} | {:7} | {:10}'
+
             # Print the worker status
+            status_text.append(status.format('Worker ID', 'User', 'Success', 'Failed', 'Empty', 'Skipped', 'Message'))
             for item in sorted(threadStatus):
-                if(threadStatus[item]['type'] == "Worker"):
+                if(threadStatus[item]['type'] == 'Worker'):
                     current_line += 1
 
                     # Skip over items that don't belong on this page
@@ -219,10 +145,8 @@ def status_printer(threadStatus, search_items_queue, db_updates_queue, wh_queue)
                     if current_line > end_line:
                         break
 
-                    if 'skip' in threadStatus[item]:
-                        status_text.append('{} - Success: {}, Failed: {}, No Items: {}, Skipped: {} - {}'.format(item, threadStatus[item]['success'], threadStatus[item]['fail'], threadStatus[item]['noitems'], threadStatus[item]['skip'], threadStatus[item]['message']))
-                    else:
-                        status_text.append('{} - Success: {}, Failed: {}, No Items: {} - {}'.format(item, threadStatus[item]['success'], threadStatus[item]['fail'], threadStatus[item]['noitems'], threadStatus[item]['message']))
+                    status_text.append(status.format(item, threadStatus[item]['user'], threadStatus[item]['success'], threadStatus[item]['fail'], threadStatus[item]['noitems'], threadStatus[item]['skip'], threadStatus[item]['message']))
+
             status_text.append('Page {}/{}.  Type page number and <ENTER> to switch pages.  Press <ENTER> alone to switch between status and log view'.format(current_page[0], total_pages))
             # Clear the screen
             os.system('cls' if os.name == 'nt' else 'clear')
@@ -263,12 +187,14 @@ def search_overseer_thread(args, method, new_location_queue, pause_bit, encrypti
             'message': 'Creating thread...',
             'success': 0,
             'fail': 0,
-            'noitems': 0
+            'noitems': 0,
+            'skip': 0,
+            'user': account['username']
         }
 
         t = Thread(target=search_worker_thread,
                    name='search-worker-{}'.format(i),
-                   args=(args, account, search_items_queue,
+                   args=(args, account, search_items_queue, pause_bit,
                          encryption_lib_path, threadStatus[workerId],
                          db_updates_queue, wh_queue))
         t.daemon = True
@@ -299,7 +225,7 @@ def search_overseer_thread(args, method, new_location_queue, pause_bit, encrypti
                         search_items_queue.get_nowait()
                 except Empty:
                     pass
-            threadStatus['Overseer']['message'] = "Scanning is paused"
+            threadStatus['Overseer']['message'] = 'Scanning is paused'
             time.sleep(1)
 
         # If a new location has been passed to us, get the most recent one
@@ -324,7 +250,7 @@ def search_overseer_thread(args, method, new_location_queue, pause_bit, encrypti
         if search_items_queue.empty():
             log.debug('Search queue empty, restarting loop')
 
-            # locations = [(lat,lng,not_before,not_after),...]
+            # locations = [((lat, lng, alt), ts_appears, ts_leaves),...]
             if method == 'hex':
                 locations = get_hex_location_list(args, current_location)
             else:
@@ -333,14 +259,13 @@ def search_overseer_thread(args, method, new_location_queue, pause_bit, encrypti
             if len(locations) == 0:
                 log.warning('Nothing to scan!')
 
-            threadStatus['Overseer']['message'] = "Queuing steps"
+            threadStatus['Overseer']['message'] = 'Queuing steps'
             for step, step_location in enumerate(locations, 1):
-                log.debug('Queueing step %d @ %f/%f/%f', step, step_location[0], step_location[1], step_location[2])
-                search_args = (step, step_location[0], step_location[1], step_location[2], step_location[3], step_location[4])
+                log.debug('Queueing step %d @ %f/%f/%f', step, step_location[0][0], step_location[0][1], step_location[0][2])
+                search_args = (step, step_location[0], step_location[1], step_location[2])
                 search_items_queue.put(search_args)
         else:
-            #   log.info('Search queue processing, %d items left', search_items_queue.qsize())
-            threadStatus['Overseer']['message'] = "Processing search queue"
+            threadStatus['Overseer']['message'] = 'Processing search queue'
 
         # Now we just give a little pause here
         time.sleep(1)
@@ -358,7 +283,7 @@ def get_hex_location_list(args, current_location):
 
     # In hex "spawns only" mode, filter out scan locations with no history of pokemons
     if args.spawnpoints_only and not args.no_pokemon:
-        n, e, s, w = Pokemon.hex_bounds(current_location, args.step_limit)
+        n, e, s, w = hex_bounds(current_location, args.step_limit)
         spawnpoints = set((d['latitude'], d['longitude']) for d in Pokemon.get_spawnpoints(s, w, n, e))
 
         if len(spawnpoints) == 0:
@@ -370,128 +295,77 @@ def get_hex_location_list(args, current_location):
         locations = [coords for coords in locations if any_spawnpoints_in_range(coords)]
 
     # put into the right struture with zero'ed before/after values
+    # locations = [(lat, lng, alt, ts_appears, ts_leaves),...]
     locationsZeroed = []
     for location in locations:
-        locationsZeroed.append((location[0], location[1], 0, 0, 0))
+        locationsZeroed.append(((location[0], location[1], 0), 0, 0))
 
     return locationsZeroed
 
 
 def get_sps_location_list(args, current_location):
-    # Attempt to load spawns from file; otherwise use the database records
-    if os.path.isfile(args.spawnpoint_scanning):
+    locations = []
+
+    # Attempt to load spawns from file
+    if args.spawnpoint_scanning != 'nofile':
         log.debug('Loading spawn points from json file @ %s', args.spawnpoint_scanning)
-        locations = []
         try:
             with open(args.spawnpoint_scanning) as file:
                 locations = json.load(file)
-        except IOError as e:
-            log.error('Error opening json file: %s', e)
         except ValueError as e:
-            log.error('JSON error: %s', e)
+            log.exception(e)
+            log.error('JSON error: %s; will fallback to database', e)
+        except IOError as e:
+            log.error('Error opening json file: %s; will fallback to database', e)
 
+    # No locations yet? Try the database!
     if not len(locations):
         log.debug('Loading spawn points from database')
         locations = Pokemon.get_spawnpoints_in_hex(current_location, args.step_limit)
 
+    # Well shit...
     if not len(locations):
         raise Exception('No availabe spawn points!')
 
-    # Put the spawn points in order by spawn time
-    locations.sort(key=itemgetter('time'))
+    # locations[]:
+    # {"lat": 37.53079079414139, "lng": -122.28811690874117, "spawnpoint_id": "808f9f1601d", "time": 511
 
     log.info('Total of %d spawns to track', len(locations))
 
-    # Find the next location to scan by time
-    pos = SbSearch(locations, (curSec() + 3540) % 3600)
+    # at this point, 'time' is DISAPPEARANCE time, we're going to morph it to APPEARANCE time
+    for location in locations:
+        # examples: time    shifted
+        #           0       (   0 + 2700) = 2700 % 3600 = 2700 (0th minute to 45th minute, 15 minutes prior to appearance as time wraps around the hour)
+        #           1800    (1800 + 2700) = 4500 % 3600 =  900 (30th minute, moved to arrive at 15th minute)
+        # todo: this DOES NOT ACCOUNT for pokemons that appear sooner and live longer, but you'll _always_ have at least 15 minutes, so it works well enough
+        location['time'] = (location['time'] + 2700) % 3600
 
-    # Then reslice the list to get the scan order right
-    locations = locations[pos:] + locations[:pos]
+        # Now, lets convert that to the next real unix timestamp since that's a ton easier to work with
+        if location['time'] > cur_sec():
+            # hasn't spawn in the current hour
+            from_now = location['time'] - cur_sec()
+            appears = time.time() + from_now
+        else:
+            # won't spawn till next hour
+            late_by = cur_sec() - location['time']
+            appears = time.time() + 3600 - late_by
 
-    # todo: set location = [ (loc, notbefore, notafter), ...]
-    return locations
+        location['appears'] = appears
+        location['leaves']  = appears + 900
 
-    # while True:
-    #     threadStatus['Overseer']['message'] = "Waiting for spawnpoints {} of {} to spawn at {}".format(pos, len(spawns), spawns[pos]['time'])
-    #     while timeDif(curSec(), spawns[pos]['time']) < 60:
-    #         time.sleep(1)
-    #     # make location with a dummy height (seems to be more reliable than 0 height)
-    #     threadStatus['Overseer']['message'] = "Queuing spawnpoint {} of {}".format(pos, len(spawns))
-    #     location = [spawns[pos]['lat'], spawns[pos]['lng'], 40.32]
-    #     search_args = (pos, location, spawns[pos]['time'])
-    #     search_items_queue.put(search_args)
-    #     pos = (pos + 1) % len(spawns)
+    # Put the spawn points in order of next appearance time
+    locations.sort(key=itemgetter('appears'))
 
+    # Match expected structure:
+    # locations = [((lat, lng, alt), ts_appears, ts_leaves),...]
+    retset = []
+    for location in locations:
+        retset.append(((location['lat'], location['lng'], 40.32), location['appears'], location['leaves']))
 
-# def search_overseer_thread_ss(args, new_location_queue, pause_bit, encryption_lib_path, db_updates_queue, wh_queue):
-#     log.info('Search ss overseer starting')
-#     search_items_queue = Queue()
-#     spawns = []
-#     threadStatus = {}
-
-#     threadStatus['Overseer'] = {'message': 'Initializing', 'type': 'Overseer', 'method': 'Spawn Scan'}
-
-#     if(args.print_status):
-#         log.info('Starting status printer thread')
-#         t = Thread(target=status_printer,
-#                   name='status_printer',
-#                   args=(threadStatus, search_items_queue, db_updates_queue, wh_queue))
-#         t.daemon = True
-#         t.start()
-
-#     # Create a search_worker_thread_ss per account
-#     log.info('Starting search worker threads')
-#     for i, account in enumerate(args.accounts):
-#         log.debug('Starting search worker thread %d for user %s', i, account['username'])
-#         threadStatus['Worker {:03}'.format(i)] = {}
-#         threadStatus['Worker {:03}'.format(i)]['type'] = "Worker"
-#         threadStatus['Worker {:03}'.format(i)]['message'] = "Creating thread..."
-#         threadStatus['Worker {:03}'.format(i)]['success'] = 0
-#         threadStatus['Worker {:03}'.format(i)]['fail'] = 0
-#         threadStatus['Worker {:03}'.format(i)]['skip'] = 0
-#         threadStatus['Worker {:03}'.format(i)]['noitems'] = 0
-#         t = Thread(target=search_worker_thread_ss,
-#                   name='ss-worker-{}'.format(i),
-#                   args=(args, account, search_items_queue,
-#                          encryption_lib_path, threadStatus['Worker {:03}'.format(i)],
-#                          db_updates_queue, wh_queue))
-#         t.daemon = True
-#         t.start()
-#
-#     if os.path.isfile(args.spawnpoint_scanning):  # if the spawns file exists use it
-#         threadStatus['Overseer']['message'] = "Getting spawnpoints from file"
-#         try:
-#             with open(args.spawnpoint_scanning) as file:
-#                 try:
-#                     spawns = json.load(file)
-#                 except ValueError:
-#                     log.error(args.spawnpoint_scanning + " is not valid")
-#                     return
-#                 file.close()
-#         except IOError:
-#             log.error("Error opening " + args.spawnpoint_scanning)
-#             return
-#     else:  # if spawns file dose not exist use the db
-#         threadStatus['Overseer']['message'] = "Getting spawnpoints from database"
-#         loc = new_location_queue.get()
-#         spawns = Pokemon.get_spawnpoints_in_hex(loc, args.step_limit)
-#     spawns.sort(key=itemgetter('time'))
-#     log.info('Total of %d spawns to track', len(spawns))
-#     # find the inital location (spawn thats 60sec old)
-#     pos = SbSearch(spawns, (curSec() + 3540) % 3600)
-#     while True:
-#         threadStatus['Overseer']['message'] = "Waiting for spawnpoints {} of {} to spawn at {}".format(pos, len(spawns), spawns[pos]['time'])
-#         while timeDif(curSec(), spawns[pos]['time']) < 60:
-#             time.sleep(1)
-#         # make location with a dummy height (seems to be more reliable than 0 height)
-#         threadStatus['Overseer']['message'] = "Queuing spawnpoint {} of {}".format(pos, len(spawns))
-#         location = [spawns[pos]['lat'], spawns[pos]['lng'], 40.32]
-#         search_args = (pos, location, spawns[pos]['time'])
-#         search_items_queue.put(search_args)
-#         pos = (pos + 1) % len(spawns)
+    return retset
 
 
-def search_worker_thread(args, account, search_items_queue, encryption_lib_path, status, dbq, whq):
+def search_worker_thread(args, account, search_items_queue, pause_bit, encryption_lib_path, status, dbq, whq):
 
     stagger_thread(args, account)
 
@@ -502,6 +376,9 @@ def search_worker_thread(args, account, search_items_queue, encryption_lib_path,
         try:
             # New lease of life right here
             status['fail'] = 0
+            status['success'] = 0
+            status['noitems'] = 0
+            status['skip'] = 0
 
             # Create the API instance this will use
             if args.mock != '':
@@ -520,35 +397,47 @@ def search_worker_thread(args, account, search_items_queue, encryption_lib_path,
                 # If this account has been messing up too hard, let it rest
                 if status['fail'] > args.max_failures:
                     end_sleep = time.time() + (3600 * 2)
-                    long_sleep_started = time.strftime("%H:%M")
+                    long_sleep_started = time.strftime('%H:%M')
                     while time.time() < end_sleep:
-                        status['message'] = 'Worker {} failed more than {} scans; possibly banned account. Sleeping for 2 hour sleep as of {}'.format(account['username'], max_failures, long_sleep_started)
+                        status['message'] = 'Account "{}" has failed more than {} scans; possibly banned account. Sleeping for 2 hour sleep as of {}'.format(account['username'], max_failures, long_sleep_started)
                         log.error(status['message'])
                         time.sleep(300)
                     break  # exit this loop to have the API recreated
 
+                while pause_bit.is_set():
+                    status['message'] = 'Scanning paused'
+                    time.sleep(2)
+
                 # Grab the next thing to search (when available)
-                status['message'] = "Waiting for item from queue"
-                step, step_location, not_before, not_after = search_items_queue.get()
+                status['message'] = 'Waiting for item from queue'
+                step, step_location, appears, leaves = search_items_queue.get()
 
                 # too soon?
-                if not_before and not_before < time.time():
-                    status['message'] = 'Worker {} is early for location {},{}; waiting for the right time'.format(account['username'], step_location[0], step_location[1])
-                    log.info(status['message'])
-                    while not_before < time.time():
-                        time.sleep(1)
+                if appears and time.time() < appears + 10:  # adding a 10 second grace period
+                    paused = False
+                    while time.time() <= appears + 10:
+                        if pause_bit.is_set():
+                            paused = True
+                            break  # why can't python just have `break 2`...
+                        remain = int(appears - time.time() + 10)
+                        status['message'] = '{}s early for location {},{}; waiting...'.format(remain, step_location[0], step_location[1])
+                        log.info(status['message'])
+                        time.sleep(5)
+                    if paused:
+                        search_items_queue.task_done()
+                        continue
 
                 # too late?
-                if not_after and not_after > time.time():
+                if leaves and time.time() > leaves:
                     search_items_queue.task_done()
                     status['skip'] += 1
-                    status['message'] = 'Worker {} was too late for location {},{}; skipping'.format(account['username'], step_location[0], step_location[1])
+                    status['message'] = 'Too late for location {},{}; skipping'.format(step_location[0], step_location[1])
                     log.info(status['message'])
                     time.sleep(args.scan_delay)
                     continue
 
-                status['message'] = "Searching at {},{}".format(step_location[0], step_location[1])
-                log.info('Search step %d beginning (queue size is %d)', step, search_items_queue.qsize())
+                status['message'] = 'Searching at {},{}'.format(step_location[0], step_location[1])
+                log.info(status['message'])
 
                 # Let the api know where we intend to be for this loop
                 api.set_position(*step_location)
@@ -562,7 +451,7 @@ def search_worker_thread(args, account, search_items_queue, encryption_lib_path,
                 # G'damnit, nothing back. Mark it up, sleep, carry on
                 if not response_dict:
                     status['fail'] += 1
-                    status['message'] = "Invalid response at {},{}, abandoning location. Username: {}".format(failed_total, step_location[0], step_location[1], sleep_time, account['username'])
+                    status['message'] = 'Invalid response at {},{}, abandoning location'.format(failed_total, step_location[0], step_location[1], sleep_time)
                     log.error(status['message'])
                     time.sleep(args.scan_delay)
                     continue
@@ -572,11 +461,11 @@ def search_worker_thread(args, account, search_items_queue, encryption_lib_path,
                     findCount = parse_map(args, response_dict, step_location, dbq, whq)
                     search_items_queue.task_done()
                     status[('success' if findCount > 0 else 'noitems')] += 1
-                    status['message'] = "Search at {},{} completed with {} finds. Username: {}".format(step_location[0], step_location[1], findCount, account['username'])
+                    status['message'] = 'Search at {},{} completed with {} finds'.format(step_location[0], step_location[1], findCount)
                     log.debug(status['message'])
                 except KeyError:
                     status['fail'] += 1
-                    status['message'] = "Map parse failed at {},{}, abandoning location. Username: {}".format(step_location[0], step_location[1], account['username'])
+                    status['message'] = 'Map parse failed at {},{}, abandoning location'.format(step_location[0], step_location[1])
                     log.exception(status['message'])
 
                 # Always delay the desired amount after "scan" completion
@@ -584,7 +473,7 @@ def search_worker_thread(args, account, search_items_queue, encryption_lib_path,
 
         # catch any process exceptions, log them, and continue the thread
         except Exception as e:
-            status['message'] = "Exception in search_worker: %s. Username: {}".format(e, account['username'])
+            status['message'] = 'Exception in search_worker: {}'.format(e)
             log.exception(status['message'])
             time.sleep(args.scan_delay)
 
@@ -624,7 +513,7 @@ def map_request(api, position, jitter=False):
     if jitter:
         # jitter it, just a little bit.
         scan_location = jitterLocation(position)
-        log.debug("Jittered to: %f/%f/%f", scan_location[0], scan_location[1], scan_location[2])
+        log.debug('Jittered to: %f/%f/%f', scan_location[0], scan_location[1], scan_location[2])
     else:
         # Just use the original coordinates
         scan_location = position

@@ -5,6 +5,7 @@ import calendar
 import sys
 import time
 import math
+import geopy
 from peewee import SqliteDatabase, InsertQuery, \
     IntegerField, CharField, DoubleField, BooleanField, \
     DateTimeField, CompositeKey, fn
@@ -17,7 +18,7 @@ from base64 import b64encode
 
 from . import config
 from .utils import get_pokemon_name, get_pokemon_rarity, get_pokemon_types, get_args
-from .transform import transform_from_wgs_to_gcj
+from .transform import transform_from_wgs_to_gcj, get_new_coords, generate_location_steps
 from .customLog import printPokemon
 
 log = logging.getLogger(__name__)
@@ -190,21 +191,10 @@ class Pokemon(BaseModel):
         return appearances
 
     @classmethod
-    def hex_bounds(cls, center, steps):
-        # Make a box that is (70m * step_limit * 2) + 70m away from the center point
-        # Rationale is that you need to travel
-        sp_dist = 0.07 * 2 * args.step_limit
-        n = get_new_coords(center, sp_dist, 0)
-        e = get_new_coords(center, sp_dist, 90)
-        s = get_new_coords(center, sp_dist, 180)
-        w = get_new_coords(center, sp_dist, 270)
-        return (n, s, e, w)
-
-    @classmethod
     def get_spawnpoints(cls, southBoundary, westBoundary, northBoundary, eastBoundary):
         query = Pokemon.select(Pokemon.latitude, Pokemon.longitude, Pokemon.spawnpoint_id)
 
-        if None not in (swLat, swLng, neLat, neLng):
+        if None not in (northBoundary, southBoundary, westBoundary, eastBoundary):
             query = (query
                      .where((Pokemon.latitude <= northBoundary) &
                             (Pokemon.latitude >= southBoundary) &
@@ -224,7 +214,7 @@ class Pokemon(BaseModel):
     def get_spawnpoints_in_hex(cls, center, steps):
         log.info('Finding spawn points {} steps away'.format(steps))
 
-        n, e, s, w = self.hex_bounds(center, steps)
+        n, e, s, w = hex_bounds(center, steps)
 
         query = (Pokemon
                  .select(Pokemon.latitude.alias('lat'),
@@ -245,13 +235,15 @@ class Pokemon(BaseModel):
 
         s = list(query.dicts())
 
-        filtered = []
         # Filter to spawns which actually fall in the hex locations
-        hex_locations = list(generate_location_steps(current_location, steps, 0.07))
+        # This loop is about as non-pythonic as you can get, I bet.
+        # Oh well.
+        filtered = []
+        hex_locations = list(generate_location_steps(center, steps, 0.07))
         for hl in hex_locations:
-            for idx, sp in s:
+            for idx, sp in enumerate(s):
                 if geopy.distance.distance(hl, (sp['lat'],sp['lng'])).meters <= 70:
-                    filtered.push(s.pop(idx))
+                    filtered.append(s.pop(idx))
 
         return filtered
 
@@ -366,6 +358,17 @@ class Versions(flaskDb.Model):
 
     class Meta:
         primary_key = False
+
+
+def hex_bounds(center, steps):
+    # Make a box that is (70m * step_limit * 2) + 70m away from the center point
+    # Rationale is that you need to travel
+    sp_dist = 0.07 * 2 * steps
+    n = get_new_coords(center, sp_dist, 0)[0]
+    e = get_new_coords(center, sp_dist, 90)[1]
+    s = get_new_coords(center, sp_dist, 180)[0]
+    w = get_new_coords(center, sp_dist, 270)[1]
+    return (n, e, s, w)
 
 
 # todo: this probably shouldn't _really_ be in "models" anymore, but w/e
