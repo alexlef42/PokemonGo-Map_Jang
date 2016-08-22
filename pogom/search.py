@@ -344,6 +344,16 @@ def get_sps_location_list(args, current_location, sps_scan_current):
 
     log.info('Total of %d spawns to track', len(locations))
 
+    locations.sort(key=itemgetter('time'))
+
+    if args.debug:
+        for i in locations:
+            sec = i['time'] % 60
+            minute = (i['time'] / 60) % 60
+            m = 'Scan [{:02}:{:02}] ({}) @ {},{}'.format(
+                  minute, sec, i['time'], i['lat'], i['lng'])
+            log.debug(m)
+
     # 'time' from json and db alike has been munged to appearance time as seconds after the hour
     # Here we'll convert that to a real timestamp
     for location in locations:
