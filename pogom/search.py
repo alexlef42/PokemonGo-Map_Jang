@@ -360,10 +360,18 @@ def get_sps_location_list(args, current_location, sps_scan_current):
         # For a scan which should cover all CURRENT pokemon, we can offset
         # the comparison time by 15 minutes so that the "appears" time
         # won't be rolled over to the next hour.
-        if sps_scan_current:
-            cursec = (location['time'] + 900) % 3600
-        else:
-            cursec = location['time']
+
+        # TODO: Make it work. The original logic (commented out) was producing
+        #       bogus results if your first scan was in the last 15 minute of
+        #       the hour. Wrapping my head around this isn't work right now,
+        #       so I'll just drop the feature for the time being. It does need
+        #       to come back so that repositioning/pausing works more nicely,
+        #       but we can live without it too.
+
+        # if sps_scan_current:
+        #     cursec = (location['time'] + 900) % 3600
+        # else:
+        cursec = location['time']
 
         if cursec > cur_sec():
             # hasn't spawn in the current hour
