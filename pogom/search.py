@@ -350,8 +350,7 @@ def get_sps_location_list(args, current_location, sps_scan_current):
         for i in locations:
             sec = i['time'] % 60
             minute = (i['time'] / 60) % 60
-            m = 'Scan [{:02}:{:02}] ({}) @ {},{}'.format(
-                  minute, sec, i['time'], i['lat'], i['lng'])
+            m = 'Scan [{:02}:{:02}] ({}) @ {},{}'.format(minute, sec, i['time'], i['lat'], i['lng'])
             log.debug(m)
 
     # 'time' from json and db alike has been munged to appearance time as seconds after the hour
