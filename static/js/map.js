@@ -1384,17 +1384,30 @@ function setupPokestopMarker (item) {
   return marker
 }
 
-function getColorByDate (value) {
-  // Changes the color from red to green over 15 mins
-  var diff = (Date.now() - value) / 1000 / 60 / 15
+// function getColorByDate (value) {
+//   // Changes the color from red to green over 15 mins
+//   var diff = (Date.now() - value) / 1000 / 60 / 15
 
-  if (diff > 1) {
-    diff = 1
+//   if (diff > 1) {
+//     diff = 1
+//   }
+
+//   // value from 0 to 1 - Green to Red
+//   var hue = ((1 - diff) * 120).toString(10)
+//   return ['hsl(', hue, ',100%,50%)'].join('')
+// }
+
+function hashCode (str) {
+  var hash = 0
+  for (var i = 0; i < str.length; i++) {
+    hash = str.charCodeAt(i) + ((hash << 5) - hash)
   }
+  return hash
+}
 
-  // value from 0 to 1 - Green to Red
-  var hue = ((1 - diff) * 120).toString(10)
-  return ['hsl(', hue, ',100%,50%)'].join('')
+function intToRGB (i) {
+  var c = (i & 0x00FFFFFF).toString(16).toUpperCase()
+  return '00000'.substring(0, 6 - c.length) + c
 }
 
 function setupScannedMarker (item) {
@@ -1405,8 +1418,9 @@ function setupScannedMarker (item) {
     clickable: false,
     center: circleCenter,
     radius: 70, // metres
-    fillColor: getColorByDate(item['last_modified']),
-    fillOpacity: 0.1,
+    // fillColor: getColorByDate(item['last_modified']),
+    fillColor: '#' + intToRGB(hashCode(item['by_user'])),
+    fillOpacity: 0.7,
     strokeWeight: 1,
     strokeOpacity: 0.5
   })
@@ -1697,7 +1711,8 @@ function processScanned (i, item) {
 
   if (scanId in mapData.scanned) {
     mapData.scanned[scanId].marker.setOptions({
-      fillColor: getColorByDate(item['last_modified'])
+      fillColor: '#' + intToRGB(hashCode(item['by_user']))
+      // fillColor: getColorByDate(item['last_modified'])
     })
   } else { // add marker to map and item to dict
     if (item.marker) {
@@ -2188,7 +2203,7 @@ $(function () {
 
   // run interval timers to regularly update map and timediffs
   window.setInterval(updateLabelDiffTime, 1000)
-  window.setInterval(updateMap, 5000)
+  window.setInterval(updateMap, 1000)
   window.setInterval(function () {
     if (navigator.geolocation && Store.get('geoLocate')) {
       navigator.geolocation.getCurrentPosition(function (position) {

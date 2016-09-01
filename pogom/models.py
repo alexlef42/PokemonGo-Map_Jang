@@ -432,6 +432,7 @@ class ScannedLocation(BaseModel):
     latitude = DoubleField()
     longitude = DoubleField()
     last_modified = DateTimeField(index=True)
+    by_user = CharField()
 
     class Meta:
         primary_key = CompositeKey('latitude', 'longitude')
@@ -516,7 +517,7 @@ def hex_bounds(center, steps):
 
 
 # todo: this probably shouldn't _really_ be in "models" anymore, but w/e
-def parse_map(args, map_dict, step_location, db_update_queue, wh_update_queue):
+def parse_map(args, account, map_dict, step_location, db_update_queue, wh_update_queue):
     pokemons = {}
     pokestops = {}
     gyms = {}
@@ -650,7 +651,8 @@ def parse_map(args, map_dict, step_location, db_update_queue, wh_update_queue):
     db_update_queue.put((ScannedLocation, {0: {
         'latitude': step_location[0],
         'longitude': step_location[1],
-        'last_modified': datetime.utcnow()
+        'last_modified': datetime.utcnow(),
+        'by_user': account['username']
     }}))
 
     return {

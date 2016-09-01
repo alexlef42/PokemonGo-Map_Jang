@@ -19,6 +19,7 @@ Search Architecture:
 
 import logging
 import math
+import pprint
 import json
 import os
 import random
@@ -169,33 +170,191 @@ def status_printer(threadStatus, search_items_queue, db_updates_queue, wh_queue)
         time.sleep(1)
 
 
-# The main search loop that keeps an eye on the over all process
+# # The main search loop that keeps an eye on the over all process
+# def search_overseer_thread(args, method, new_location_queue, pause_bit, encryption_lib_path, db_updates_queue, wh_queue):
+
+#     log.info('Search overseer starting')
+#     threadStatus = {}
+
+#     threadStatus['Overseer'] = {
+#         'message': 'Initializing',
+#         'type': 'Overseer',
+#         'method': 'Hex Grid' if method == 'hex' else 'Spawn Point'
+#     }
+
+
+#     # In HEX mode, we have a search set PER WORKER and we offset each one on
+#     # the full scanning path so that workers never leap frog
+#     if method == 'hex':
+#         hex_search_items_queue = {}
+#     else:
+#         sps_search_items_queue = Queue()
+
+#     # if(args.print_status):
+#     #     log.info('Starting status printer thread')
+#     #     t = Thread(target=status_printer,
+#     #               name='status_printer',
+#     #               args=(threadStatus, search_items_queue, db_updates_queue, wh_queue))
+#     #     t.daemon = True
+#     #     t.start()
+
+#     # Create a search_worker_thread per account
+#     log.info('Starting search worker threads')
+#     for i, account in enumerate(args.accounts):
+#         log.debug('Starting search worker thread %d for user %s', i, account['username'])
+#         workerId = 'Worker {:03}'.format(i)
+
+#         threadStatus[workerId] = {
+#             'type': 'Worker',
+#             'message': 'Creating thread...',
+#             'success': 0,
+#             'fail': 0,
+#             'noitems': 0,
+#             'skip': 0,
+#             'user': account['username']
+#         }
+
+#         if method == 'hex':
+#             search_items_queue = hex_search_items_queue[i] = Queue()
+#         else:
+#             search_items_queue = sps_search_items_queue
+
+#         t = Thread(target=search_worker_thread,
+#                   name='search-worker-{}'.format(i),
+#                   args=(args, account, search_items_queue, pause_bit,
+#                          encryption_lib_path, threadStatus[workerId],
+#                          db_updates_queue, wh_queue))
+#         t.daemon = True
+#         t.start()
+
+#     '''
+#     For hex scanning, we can generate the full list of scan points well
+#     in advance. When then can queue them all up to be searched as fast
+#     as the threads will allow.
+
+#     With spawn point scanning (sps) we can come up with the order early
+#     on, and we can populate the entire queue, but the individual threads
+#     will need to wait until the point is available (and ensure it is not
+#     to late as well).
+#     '''
+
+#     # A place to track the current location
+#     current_location = False
+
+#     # Used to tell SPS to scan for all CURRENT pokemon instead
+#     # of, like during a normal loop, just finding the next one
+#     # which will appear (since you've already scanned existing
+#     # locations in the prior loop)
+#     # Needed in a first loop and pausing/changing location.
+#     sps_scan_current = True
+
+#     hex_scan_iteration = 0
+
+#     # The real work starts here but will halt on pause_bit.set()
+#     while True:
+
+#         # paused; clear queue if needed, otherwise sleep and loop
+#         while pause_bit.is_set():
+#             if not search_items_queue.empty():
+#                 try:
+#                     while True:
+#                         search_items_queue.get_nowait()
+#                 except Empty:
+#                     pass
+#             threadStatus['Overseer']['message'] = 'Scanning is paused'
+#             sps_scan_current = True
+#             time.sleep(1)
+
+#         # If a new location has been passed to us, get the most recent one
+#         if not new_location_queue.empty():
+#             log.info('New location caught, moving search grid')
+#             sps_scan_current = True
+#             try:
+#                 while True:
+#                     current_location = new_location_queue.get_nowait()
+#             except Empty:
+#                 pass
+
+#             # We (may) need to clear the search_items_queue
+#             if not search_items_queue.empty():
+#                 try:
+#                     while True:
+#                         search_items_queue.get_nowait()
+#                 except Empty:
+#                     pass
+
+#         # If there are no search_items_queue either the loop has finished (or been
+#         # cleared above) -- either way, time to fill it back up
+#         if search_items_queue.empty():
+#             log.debug('Search queue empty, restarting loop')
+
+#             # locations = [((lat, lng, alt), ts_appears, ts_leaves),...]
+#             if method == 'hex':
+#                 locations = get_hex_location_list(args, current_location)
+#                 hex_scan_iteration += 1
+#             else:
+#                 locations = get_sps_location_list(args, current_location, sps_scan_current)
+#                 sps_scan_current = False
+
+#             if len(locations) == 0:
+#                 log.warning('Nothing to scan!')
+
+#             # round up so there's always at least one step per worker
+#             steps_per_worker = math.ceil(float(len(hex_search_items_queue)) / len(hex_search_items_queue))
+
+#             threadStatus['Overseer']['message'] = 'Queuing steps'
+#             for step, step_location in enumerate(locations, 1):
+#                 log.debug('Queueing step %d @ %f/%f/%f', step, step_location[0][0], step_location[0][1], step_location[0][2])
+#                 search_args = (step, step_location[0], step_location[1], step_location[2])
+
+#                 if method == 'hex':
+
+#                     hex_search_items_queue[i].put(search_args)
+#                 else:
+#                     search_items_queue.put(search_args)
+#         else:
+#             nextitem = search_items_queue.queue[0]
+#             threadStatus['Overseer']['message'] = 'Processing search queue, next item is {:6f},{:6f}'.format(nextitem[1][0], nextitem[1][1])
+#             # If times are specified, print the time of the next queue item, and how many seconds ahead/behind realtime
+#             if nextitem[2]:
+#                 threadStatus['Overseer']['message'] += ' @ {}'.format(time.strftime('%H:%M:%S', time.localtime(nextitem[2])))
+#                 if nextitem[2] > now():
+#                     threadStatus['Overseer']['message'] += ' ({}s ahead)'.format(nextitem[2] - now())
+#                 else:
+#                     threadStatus['Overseer']['message'] += ' ({}s behind)'.format(now() - nextitem[2])
+
+#         # Now we just give a little pause here
+#         time.sleep(1)
+
+
 def search_overseer_thread(args, method, new_location_queue, pause_bit, encryption_lib_path, db_updates_queue, wh_queue):
 
-    log.info('Search overseer starting')
-
-    search_items_queue = Queue()
+    log.info('Search overseer starting; hex mode')
     threadStatus = {}
 
     threadStatus['Overseer'] = {
         'message': 'Initializing',
         'type': 'Overseer',
-        'method': 'Hex Grid' if method == 'hex' else 'Spawn Point'
+        'method': 'Hex Grid'
     }
 
-    if(args.print_status):
-        log.info('Starting status printer thread')
-        t = Thread(target=status_printer,
-                   name='status_printer',
-                   args=(threadStatus, search_items_queue, db_updates_queue, wh_queue))
-        t.daemon = True
-        t.start()
+
+    hex_search_items_queue = {}
+
+    # if(args.print_status):
+    #     log.info('Starting status printer thread')
+    #     t = Thread(target=status_printer,
+    #               name='status_printer',
+    #               args=(threadStatus, search_items_queue, db_updates_queue, wh_queue))
+    #     t.daemon = True
+    #     t.start()
 
     # Create a search_worker_thread per account
     log.info('Starting search worker threads')
     for i, account in enumerate(args.accounts):
         log.debug('Starting search worker thread %d for user %s', i, account['username'])
         workerId = 'Worker {:03}'.format(i)
+
         threadStatus[workerId] = {
             'type': 'Worker',
             'message': 'Creating thread...',
@@ -206,54 +365,41 @@ def search_overseer_thread(args, method, new_location_queue, pause_bit, encrypti
             'user': account['username']
         }
 
+        hex_search_items_queue[i] = Queue()
+
         t = Thread(target=search_worker_thread,
-                   name='search-worker-{}'.format(i),
-                   args=(args, account, search_items_queue, pause_bit,
+                  name='search-worker-{}'.format(i),
+                  args=(args, account, hex_search_items_queue[i], pause_bit,
                          encryption_lib_path, threadStatus[workerId],
                          db_updates_queue, wh_queue))
         t.daemon = True
         t.start()
 
-    '''
-    For hex scanning, we can generate the full list of scan points well
-    in advance. When then can queue them all up to be searched as fast
-    as the threads will allow.
-
-    With spawn point scanning (sps) we can come up with the order early
-    on, and we can populate the entire queue, but the individual threads
-    will need to wait until the point is available (and ensure it is not
-    to late as well).
-    '''
-
     # A place to track the current location
     current_location = False
 
-    # Used to tell SPS to scan for all CURRENT pokemon instead
-    # of, like during a normal loop, just finding the next one
-    # which will appear (since you've already scanned existing
-    # locations in the prior loop)
-    # Needed in a first loop and pausing/changing location.
-    sps_scan_current = True
+    # With each loop of the scan, we need to move each account "down" the line,
+    # this variable helps us track that
+    hex_scan_iteration = 0
 
     # The real work starts here but will halt on pause_bit.set()
     while True:
 
-        # paused; clear queue if needed, otherwise sleep and loop
+        # paused; clear queues if needed, otherwise sleep and loop
         while pause_bit.is_set():
-            if not search_items_queue.empty():
-                try:
-                    while True:
-                        search_items_queue.get_nowait()
-                except Empty:
-                    pass
+            for qid, queue in hex_search_items_queue.iteritems():
+                if not queue.empty():
+                    try:
+                        while True:
+                            queue.get_nowait()
+                    except Empty:
+                        pass
             threadStatus['Overseer']['message'] = 'Scanning is paused'
-            sps_scan_current = True
             time.sleep(1)
 
         # If a new location has been passed to us, get the most recent one
         if not new_location_queue.empty():
             log.info('New location caught, moving search grid')
-            sps_scan_current = True
             try:
                 while True:
                     current_location = new_location_queue.get_nowait()
@@ -261,43 +407,69 @@ def search_overseer_thread(args, method, new_location_queue, pause_bit, encrypti
                 pass
 
             # We (may) need to clear the search_items_queue
-            if not search_items_queue.empty():
-                try:
-                    while True:
-                        search_items_queue.get_nowait()
-                except Empty:
-                    pass
+            for qid, queue in hex_search_items_queue.iteritems():
+                if not queue.empty():
+                    try:
+                        while True:
+                            queue.get_nowait()
+                    except Empty:
+                        pass
+
+        # All queues done?
+        all_done = True
+        for qid, queue in hex_search_items_queue.iteritems():
+            if not queue.empty():
+                all_done = False
 
         # If there are no search_items_queue either the loop has finished (or been
         # cleared above) -- either way, time to fill it back up
-        if search_items_queue.empty():
+        if all_done:
             log.debug('Search queue empty, restarting loop')
 
-            # locations = [((lat, lng, alt), ts_appears, ts_leaves),...]
-            if method == 'hex':
-                locations = get_hex_location_list(args, current_location)
-            else:
-                locations = get_sps_location_list(args, current_location, sps_scan_current)
-                sps_scan_current = False
+            # locations = [(stepid, lat, lng),...]
+            locations = get_hex_location_list(args, current_location)
+            hex_scan_iteration += 1
 
             if len(locations) == 0:
                 log.warning('Nothing to scan!')
 
+            # Shift the locations around so that as we divy them out to threads,
+            # they "walk" around the full path
+            steps_per_worker = math.ceil(float(len(locations)) / len(hex_search_items_queue))
+
             threadStatus['Overseer']['message'] = 'Queuing steps'
-            for step, step_location in enumerate(locations, 1):
-                log.debug('Queueing step %d @ %f/%f/%f', step, step_location[0][0], step_location[0][1], step_location[0][2])
-                search_args = (step, step_location[0], step_location[1], step_location[2])
-                search_items_queue.put(search_args)
+
+            # split the location list into chunks of "steps per worker"
+            # because we round up, chunks will always be at least 1, and
+            # in some cases the last chunk will be shorter than the rest
+            chunks = []
+            for i in range(0, len(locations), steps_per_worker):
+                chunks.append(locations[i:i+steps_per_worker])
+
+            threadSet = {}
+
+            # assign each chunk to a thread, but offset it by the overall
+            # iteration so that each thread walks the full path in a
+            # complete loop. We _could_ have just assigned the full path
+            # to each worker with an offset amount, but then the overall
+            # loop (overseer) wouldn't re-trigger until each worker thread
+            # has done a full loop. We want to "check in" on the threads
+            # more frequently than that
+            for i in range(hex_scan_iteration, hex_scan_iteration+len(hex_search_items_queue)):
+                threadId = i % len(hex_search_items_queue)
+                threadSet[threadId] = []
+                if len(chunks) <= 0:
+                    # sometimes you end up with fewer chunks than accounts,
+                    # so threads get a "rest" period :)
+                    break
+                subset = chunks.pop()
+                for step_location in subset:
+                    search_args = (step_location[0], (step_location[1], step_location[2], 0), 0, 0)
+                    hex_search_items_queue[threadId].put(search_args)
+                    threadSet[threadId].append(step_location[0])
+
         else:
-            nextitem = search_items_queue.queue[0]
-            threadStatus['Overseer']['message'] = 'Processing search queue, next item is {:6f},{:6f}'.format(nextitem[1][0], nextitem[1][1])
-            # If times are specified, print the time of the next queue item, and how many seconds ahead/behind realtime
-            if nextitem[2]:
-                threadStatus['Overseer']['message'] += ' @ {}'.format(time.strftime('%H:%M:%S', time.localtime(nextitem[2])))
-                if nextitem[2] > now():
-                    threadStatus['Overseer']['message'] += ' ({}s ahead)'.format(nextitem[2] - now())
-                else:
-                    threadStatus['Overseer']['message'] += ' ({}s behind)'.format(now() - nextitem[2])
+            threadStatus['Overseer']['message'] = 'Processing search queue'
 
         # Now we just give a little pause here
         time.sleep(1)
@@ -329,8 +501,8 @@ def get_hex_location_list(args, current_location):
     # put into the right struture with zero'ed before/after values
     # locations = [(lat, lng, alt, ts_appears, ts_leaves),...]
     locationsZeroed = []
-    for location in locations:
-        locationsZeroed.append(((location[0], location[1], 0), 0, 0))
+    for i, location in enumerate(locations,1):
+        locationsZeroed.append( (i, location[0], location[1]) )
 
     return locationsZeroed
 
@@ -513,7 +685,7 @@ def search_worker_thread(args, account, search_items_queue, pause_bit, encryptio
 
                 # Got the response, parse it out, send todo's to db/wh queues
                 try:
-                    parsed = parse_map(args, response_dict, step_location, dbq, whq)
+                    parsed = parse_map(args, account, response_dict, step_location, dbq, whq)
                     search_items_queue.task_done()
                     status[('success' if parsed['count'] > 0 else 'noitems')] += 1
                     status['message'] = 'Search at {:6f},{:6f} completed with {} finds'.format(step_location[0], step_location[1], parsed['count'])
