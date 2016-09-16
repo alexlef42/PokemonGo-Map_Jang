@@ -1,0 +1,46 @@
+python ./runserver.py -a ptc^
+ -u "autopokejangles1" -u "autopokejangles2" -u "autopokejangles3" -u "autopokejangles4" -u "autopokejangles5"^
+ -u "autopokejangles6" -u "autopokejangles7" -u "autopokejangles8" -u "autopokejangles9"^
+ -u "pokejangles" -u "pokejangles2" -u "pokejangles3" -u "pokejangles4" -u "pokejangles5"^
+ -u "pokejangles6" -u "pokejangles7" -u "pokejangles8" -u "pokejangles9" -u "pokejangles10"^
+ -u "pokejangles11" -u "pokejangles12" -u "pokejangles13" -u "pokejangles14" -u "pokejangles15"^
+ -u "pokejangles16" -u "pokejangles17" -u "pokejangles18" -u "pokejangles19" -u "pokejangles20"^
+ -u "pokejangles21" -u "pokejangles22" -u "pokejangles23" -u "pokejangles24" -u "pokejangles25"^
+ -u "pokejangles26" -u "pokejangles27" -u "pokejangles28" -u "pokejangles29" -u "pokejangles30"^
+ -u "pokejangles31" -u "pokejangles32" -u "pokejangles33" -u "pokejangles34"^
+ -u "pokejangles36" -u "pokejangles37" -u "pokejangles38" -u "pokejangles39" -u "pokejangles40"^
+ -u "pokejangles41" -u "pokejangles42" -u "pokejangles43" -u "pokejangles44" -u "pokejangles45"^
+ -u "pokejangles46" -u "pokejangles47" -u "pokejangles48" -u "pokejangles49" -u "pokejangles50"^
+ -u "pokejangles51" -u "pokejangles52" -u "pokejangles53" -u "pokejangles54" -u "pokejangles55"^
+ -u "pokejangles56" -u "pokejangles57" -u "pokejangles58" -u "pokejangles59" -u "pokejangles60"^
+ -u "pokejangles61" -u "pokejangles62" -u "pokejangles63" -u "pokejangles64" -u "pokejangles65"^
+ -u "pokejangles66" -u "pokejangles67" -u "pokejangles68" -u "pokejangles69" -u "pokejangles70"^
+ -u "pokejangles71" -u "pokejangles72" -u "pokejangles73" -u "pokejangles74" -u "pokejangles75"^
+ -u "pokejangles76" -u "pokejangles77" -u "pokejangles78" -u "pokejangles79" -u "pokejangles80"^
+ -u "pokejangles81" -u "pokejangles82" -u "pokejangles83" -u "pokejangles84" -u "pokejangles85"^
+ -u "pokejangles86" -u "pokejangles87" -u "pokejangles88" -u "pokejangles89" -u "pokejangles90"^
+ -u "pokejangles91" -u "pokejangles92" -u "pokejangles93" -u "pokejangles94" -u "pokejangles95"^
+ -u "pokejangles96" -u "pokejangles97" -u "pokejangles98" -u "pokejangles99" -u "pokejangles100"^
+ -u "pokejangles101" -u "pokejangles102" -u "pokejangles103" -u "pokejangles104" -u "pokejangles105"^
+ -u "pokejangles106" -u "pokejangles107" -u "pokejangles108" -u "pokejangles109" -u "pokejangles110"^
+ -u "pokejangles111" -u "pokejangles112" -u "pokejangles113" -u "pokejangles114" -u "pokejangles115"^
+ -u "pokejangles116" -u "pokejangles117" -u "pokejangles118" -u "pokejangles119" -u "pokejangles120"^
+ -u "pokejangles121" -u "pokejangles122" -u "pokejangles123" -u "pokejangles124" -u "pokejangles125"^
+ -u "pokejangles126" -u "pokejangles127" -u "pokejangles128" -u "pokejangles129" -u "pokejangles130"^
+ -u "pokejangles131" -u "pokejangles132" -u "pokejangles133" -u "pokejangles134" -u "pokejangles135"^
+ -u "pokejangles136" -u "pokejangles137" -u "pokejangles138" -u "pokejangles139" -u "pokejangles140"^
+ -u "pokejangles141" -u "pokejangles142" -u "pokejangles143" -u "pokejangles144" -u "pokejangles145"^
+ -u "pokejangles146" -u "pokejangles147" -u "pokejangles148" -u "pokejangles149" -u "pokejangles150"^
+ -u "pokejangles151" -u "pokejangles152" -u "pokejangles153" -u "pokejangles154" -u "pokejangles155"^
+ -u "pokejangles156" -u "pokejangles157" -u "pokejangles158" -u "pokejangles159" -u "pokejangles160"^
+ -u "pokejangles161" -u "pokejangles162" -u "pokejangles163" -u "pokejangles164" -u "pokejangles165"^
+ -u "pokejangles166" -u "pokejangles167" -u "pokejangles168" -u "pokejangles169" -u "pokejangles170"^
+ -u "pokejangles171" -u "pokejangles172" -u "pokejangles173" -u "pokejangles174" -u "pokejangles175"^
+ -u "pokejangles176" -u "pokejangles177" -u "pokejangles178" -u "pokejangles179" -u "pokejangles180"^
+ -u "pokejangles181" -u "pokejangles182" -u "pokejangles183" -u "pokejangles184" -u "pokejangles185"^
+ -u "pokejangles186" -u "pokejangles187" -u "pokejangles188" -u "pokejangles189" -u "pokejangles190"^
+ -u "pokejangles191" -u "pokejangles192" -u "pokejangles193" -u "pokejangles194" -u "pokejangles195"^
+ -u "pokejangles196" -u "pokejangles197" -u "pokejangles198" -u "pokejangles199" -u "pokejangles200"^
+ -p "109575" -l "503 7th St N, Fargo, ND 58102" -st 50 -ps -j -k "AIzaSyDh4SZxK4p-oD-s_J6YBr6IyNgRUWgt3iA" -H 0.0.0.0^
+ -sw "https://hooks.slack.com/services/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" -sr "Ultra Rare" -sr "Very Rare" -smd 1000
+ REM --spawnpoints-only

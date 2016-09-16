@@ -16,7 +16,6 @@ _build
 _build_html
 beehive.*
 *.csv
-*.bat
 *.sh
 *.log
 !docs/make.bat

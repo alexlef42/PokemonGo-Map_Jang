@@ -155,6 +155,12 @@ def get_args():
                         type=int, default=1)
     parser.add_argument('-wh', '--webhook', help='Define URL(s) to POST webhook information to',
                         nargs='*', default=False, dest='webhooks')
+    parser.add_argument('-sw', '--slack-webhook', help='Define URL(s) to POST slack webhook information to',
+						action='append', dest='slack_webhooks')
+    parser.add_argument('-sr', '--slack-rarity', help='Define Pokemon Rarities to post to slack webhook',
+                        action='append', dest='slack_rarities')
+    parser.add_argument('-smd', '--slack-max-distance', help='Define the maximum distance for pokemon that will be posted to slack',
+                        type=int, default=-1, dest='slack_max_distance')
     parser.add_argument('-gi', '--gym-info', help='Get all details about gyms (causes an additional API hit for every gym)',
                         action='store_true', default=False)
     parser.add_argument('--disable-clean', help='Disable clean db loop',

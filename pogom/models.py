@@ -592,6 +592,12 @@ def parse_map(args, map_dict, step_location, db_update_queue, wh_update_queue):
                 else:
                     # Set a value of 15 minutes because currently its unknown but larger than 15.
                     d_t = datetime.utcfromtimestamp((p['last_modified_timestamp_ms'] + 900000) / 1000.0)
+					
+                existing = False
+                for encounter_id, pokemon in pokemons.items():
+                    if p['latitude'] == pokemon['latitude'] and p['longitude'] == pokemon['longitude']:
+                        existing = True
+                        break
 
                 printPokemon(p['pokemon_data']['pokemon_id'], p['latitude'],
                              p['longitude'], d_t)
@@ -615,6 +621,9 @@ def parse_map(args, map_dict, step_location, db_update_queue, wh_update_queue):
                         'last_modified_time': p['last_modified_timestamp_ms'],
                         'time_until_hidden_ms': p['time_till_hidden_ms']
                     }))
+					
+                if not existing and args.slack_webhooks:
+                    notify_via_slack(pokemons[p['encounter_id']], user_location, p['time_till_hidden_ms'])
 
         for f in cell.get('forts', []):
             if config['parse_pokestops'] and f.get('type') == 1:  # Pokestops
@@ -715,6 +724,50 @@ def parse_map(args, map_dict, step_location, db_update_queue, wh_update_queue):
         'count': len(pokemons) + len(pokestops) + len(gyms),
         'gyms': gyms,
     }
+	
+def notify_via_slack(input, user_location, time_till_hidden_ms):
+
+    encodedPokename = get_pokemon_name(input['pokemon_id'])
+    rarity = get_pokemon_rarity(input['pokemon_id'])
+    
+    if args.slack_rarities and rarity not in args.slack_rarities:
+        return
+
+    distance = haversine(input['longitude'], input['latitude'], user_location[1], user_location[0])
+
+    if args.slack_max_distance >= 0 and args.slack_max_distance < distance:
+        return
+        
+    disappear_seconds = time_till_hidden_ms / 1000
+    
+    if disappear_seconds > 0:
+        m, s = divmod(disappear_seconds, 60)
+            
+        time_string = "%d:%02d" % (m, s)
+        
+        for url in args.slack_webhooks:
+            image_url = "http://pokedream.com/pokedex/images/mini/%03d.png" % input['pokemon_id']
+	    map_url = "http://maps.google.com?q={},{}".format(input['latitude'], input['longitude'])
+
+            requests.post(url, data = "{\"username\":\"Pokefinder BOT\", \"icon_emoji\":\":pokeball:\", \"text\": \"A wild *" + encodedPokename + "* is " + "%.0f" % distance + " yards away!\", \"attachments\": [ {\"title\": \"View on map\", \"thumb_url\": \"" + image_url + "\", \"title_link\": \"" + map_url + "\", \"text\": \"Expires in " + time_string + "\"}]}")
+
+
+def haversine(lon1, lat1, lon2, lat2):
+    #print "-----------------------------------------------------------------------------------------"
+    #print "input longitude:" + str(lon1) + " latitude:" + str(lat1)
+    #print "input longitude:" + str(lon2) + " latitude:" + str(lat2)
+    #print "-----------------------------------------------------------------------------------------"
+    
+    # convert decimal degrees to radians
+    lon1, lat1, lon2, lat2 = map(radians, [lon1, lat1, lon2, lat2])
+    
+    # haversine formula
+    dlon = lon2 - lon1
+    dlat = lat2 - lat1
+    a = sin(dlat/2)**2 + cos(lat1) * cos(lat2) * sin(dlon/2)**2
+    c = 2 * asin(sqrt(a))
+    r = 6962560
+    return c * r
 
 
 def parse_gyms(args, gym_responses, wh_update_queue):

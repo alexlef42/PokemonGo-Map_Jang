@@ -1,0 +1,12 @@
+cd ~/Repositories/PokemonGo-Map
+python ./runserver.py -a ptc \
+-u "pokejangles" -u "pokejangles2" -u "pokejangles3" -u "pokejangles4" -u "pokejangles5" \
+-u "pokejangles6" -u "pokejangles7" -u "pokejangles8" -u "pokejangles9" -u "pokejangles10" \
+-u "pokejangles11" -u "pokejangles12" -u "pokejangles13" -u "pokejangles14" -u "pokejangles15" \
+-u "pokejangles16" -u "pokejangles17" -u "pokejangles18" -u "pokejangles19" -u "pokejangles20" \
+-p "109575" -l "503 7th St N, Fargo, ND 58102" -st 15 -ps -j -k "AIzaSyDh4SZxK4p-oD-s_J6YBr6IyNgRUWgt3iA" \
+-sw "https://hooks.slack.com/services/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" \
+-sr "Ultra Rare" -sr "Very Rare" -sr "Rare" -sr "Uncommon" \
+-smd 1000 \
+#--spawnpoints-only
+
