@@ -41,6 +41,6 @@ python ./runserver.py -a ptc^
  -u "pokejangles186" -u "pokejangles187" -u "pokejangles188" -u "pokejangles189" -u "pokejangles190"^
  -u "pokejangles191" -u "pokejangles192" -u "pokejangles193" -u "pokejangles194" -u "pokejangles195"^
  -u "pokejangles196" -u "pokejangles197" -u "pokejangles198" -u "pokejangles199" -u "pokejangles200"^
- -p "109575" -l "503 7th St N, Fargo, ND 58102" -st 50 -ps -j -k "AIzaSyDh4SZxK4p-oD-s_J6YBr6IyNgRUWgt3iA" -H 0.0.0.0^
+ -p "109575" -l "503 7th St N, Fargo, ND 58102" -st 40 -ps -j -k "AIzaSyDh4SZxK4p-oD-s_J6YBr6IyNgRUWgt3iA" -H 0.0.0.0^
  -sw "https://hooks.slack.com/services/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" -sr "Ultra Rare" -sr "Very Rare" -smd 1000
  REM --spawnpoints-only
