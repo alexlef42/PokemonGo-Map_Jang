@@ -251,7 +251,7 @@ def worker_status_db_thread(threads_status, name, db_updates_queue):
 
 
 # The main search loop that keeps an eye on the over all process
-def search_overseer_thread(args, new_location_queue, pause_bit, encryption_lib_path, db_updates_queue, wh_queue):
+def search_overseer_thread(args, user_location, new_location_queue, pause_bit, encryption_lib_path, db_updates_queue, wh_queue):
 
     log.info('Search overseer starting')
 
@@ -330,7 +330,7 @@ def search_overseer_thread(args, new_location_queue, pause_bit, encryption_lib_p
 
         t = Thread(target=search_worker_thread,
                    name='search-worker-{}'.format(i),
-                   args=(args, account_queue, account_failures, search_items_queue, pause_bit,
+                   args=(args, user_location, account_queue, account_failures, search_items_queue, pause_bit,
                          encryption_lib_path, threadStatus[workerId],
                          db_updates_queue, wh_queue))
         t.daemon = True
@@ -380,7 +380,7 @@ def search_overseer_thread(args, new_location_queue, pause_bit, encryption_lib_p
         time.sleep(1)
 
 
-def search_worker_thread(args, account_queue, account_failures, search_items_queue, pause_bit, encryption_lib_path, status, dbq, whq):
+def search_worker_thread(args, user_location, account_queue, account_failures, search_items_queue, pause_bit, encryption_lib_path, status, dbq, whq):
 
     log.debug('Search worker thread starting')
 
@@ -500,7 +500,7 @@ def search_worker_thread(args, account_queue, account_failures, search_items_que
 
                 # Got the response, parse it out, send todo's to db/wh queues
                 try:
-                    parsed = parse_map(args, response_dict, step_location, dbq, whq)
+                    parsed = parse_map(args, response_dict, step_location, user_location, dbq, whq)
                     search_items_queue.task_done()
                     status[('success' if parsed['count'] > 0 else 'noitems')] += 1
                     consecutive_fails = 0

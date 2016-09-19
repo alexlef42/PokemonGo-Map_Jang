@@ -252,7 +252,7 @@ def main():
                 file.write(json.dumps(spawns))
                 log.info('Finished exporting spawn points')
 
-        argset = (args, new_location_queue, pause_bit, encryption_lib_path, db_updates_queue, wh_updates_queue)
+        argset = (args, position, new_location_queue, pause_bit, encryption_lib_path, db_updates_queue, wh_updates_queue)
 
         log.debug('Starting a %s search thread', args.scheduler)
         search_thread = Thread(target=search_overseer_thread, name='search-overseer', args=argset)
