@@ -15,7 +15,6 @@ src/
 _build
 _build_html
 beehive.*
-*.csv
 *.sh
 *.log
 !docs/make.bat
