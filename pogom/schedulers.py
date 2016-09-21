@@ -129,71 +129,54 @@ class HexSearch(BaseScheduler):
 
         if self.step_limit > 1:
             loc = self.scan_location
-
-            # upper part
+            
             ring = 1
             while ring < self.step_limit:
 
-                loc = get_new_coords(loc, xdist, WEST if ring % 2 == 1 else EAST)
+                # Place a point straight West
+                loc = get_new_coords(loc, xdist, WEST)
                 results.append((loc[0], loc[1], 0))
-
+                
+                # Head North East
                 for i in range(ring):
                     loc = get_new_coords(loc, ydist, NORTH)
-                    loc = get_new_coords(loc, xdist / 2, EAST if ring % 2 == 1 else WEST)
+                    loc = get_new_coords(loc, xdist / 2, EAST)
                     results.append((loc[0], loc[1], 0))
-
+                
+                # Head East
                 for i in range(ring):
-                    loc = get_new_coords(loc, xdist, EAST if ring % 2 == 1 else WEST)
+                    loc = get_new_coords(loc, xdist, EAST)
                     results.append((loc[0], loc[1], 0))
-
+                  
+                # Head South East
                 for i in range(ring):
                     loc = get_new_coords(loc, ydist, SOUTH)
-                    loc = get_new_coords(loc, xdist / 2, EAST if ring % 2 == 1 else WEST)
+                    loc = get_new_coords(loc, xdist / 2, EAST)
                     results.append((loc[0], loc[1], 0))
-
-                ring += 1
-
-            # lower part
-            ring = self.step_limit - 1
-
-            loc = get_new_coords(loc, ydist, SOUTH)
-            loc = get_new_coords(loc, xdist / 2, WEST if ring % 2 == 1 else EAST)
-            results.append((loc[0], loc[1], 0))
-
-            while ring > 0:
-
-                if ring == 1:
+                    
+                # Head South West
+                for i in range(ring):
+                    loc = get_new_coords(loc, ydist, SOUTH)
+                    loc = get_new_coords(loc, xdist / 2, WEST)
+                    results.append((loc[0], loc[1], 0))
+                    
+                # Head West
+                for i in range(ring):
                     loc = get_new_coords(loc, xdist, WEST)
                     results.append((loc[0], loc[1], 0))
-
-                else:
-                    for i in range(ring - 1):
-                        loc = get_new_coords(loc, ydist, SOUTH)
-                        loc = get_new_coords(loc, xdist / 2, WEST if ring % 2 == 1 else EAST)
-                        results.append((loc[0], loc[1], 0))
-
-                    for i in range(ring):
-                        loc = get_new_coords(loc, xdist, WEST if ring % 2 == 1 else EAST)
-                        results.append((loc[0], loc[1], 0))
-
-                    for i in range(ring - 1):
-                        loc = get_new_coords(loc, ydist, NORTH)
-                        loc = get_new_coords(loc, xdist / 2, WEST if ring % 2 == 1 else EAST)
-                        results.append((loc[0], loc[1], 0))
-
-                    loc = get_new_coords(loc, xdist, EAST if ring % 2 == 1 else WEST)
+                    
+                # Head North West
+                for i in range(ring - 1):
+                    loc = get_new_coords(loc, ydist, NORTH)
+                    loc = get_new_coords(loc, xdist / 2, WEST)
                     results.append((loc[0], loc[1], 0))
-
-                ring -= 1
-
-        # This will pull the last few steps back to the front of the list
-        # so you get a "center nugget" at the beginning of the scan, instead
-        # of the entire nothern area before the scan spots 70m to the south.
-        if self.step_limit >= 3:
-            if self.step_limit == 3:
-                results = results[-2:] + results[:-2]
-            else:
-                results = results[-7:] + results[:-7]
+                
+                # Put the location back to start, but don't append it again.
+                loc = get_new_coords(loc, ydist, NORTH)
+                loc = get_new_coords(loc, xdist / 2, WEST)
+                    
+                # On to the next ring!
+                ring += 1
 
         # Add the required appear and disappear times
         locationsZeroed = []
