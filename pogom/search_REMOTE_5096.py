@@ -37,7 +37,6 @@ from pgoapi.exceptions import AuthException
 from .models import parse_map, GymDetails, parse_gyms, MainWorker, WorkerStatus
 from .fakePogoApi import FakePogoApi
 from .utils import now
-from .transform import get_new_coords
 import schedulers
 
 import terminalsize
@@ -252,12 +251,11 @@ def worker_status_db_thread(threads_status, name, db_updates_queue):
 
 
 # The main search loop that keeps an eye on the over all process
-def search_overseer_thread(args, user_location, new_location_queue, pause_bit, heartb, encryption_lib_path, db_updates_queue, wh_queue):
+def search_overseer_thread(args, new_location_queue, pause_bit, heartb, encryption_lib_path, db_updates_queue, wh_queue):
 
     log.info('Search overseer starting')
 
-    search_items_queue_array = []
-    scheduler_array = []
+    search_items_queue = Queue()
     account_queue = Queue()
     threadStatus = {}
 
@@ -272,8 +270,6 @@ def search_overseer_thread(args, user_location, new_location_queue, pause_bit, h
 
     # Create a list for failed accounts
     account_failures = []
-    
-    search_items_queue = Queue()
 
     threadStatus['Overseer'] = {
         'message': 'Initializing',
@@ -307,9 +303,6 @@ def search_overseer_thread(args, user_location, new_location_queue, pause_bit, h
     log.info('Starting search worker threads')
     for i in range(0, args.workers):
         log.debug('Starting search worker thread %d', i)
-        
-        search_items_queue = Queue()
-        search_items_queue_array.append(search_items_queue)
 
         # Set proxy for each worker, using round robin
         proxy_display = 'No'
@@ -337,18 +330,17 @@ def search_overseer_thread(args, user_location, new_location_queue, pause_bit, h
 
         t = Thread(target=search_worker_thread,
                    name='search-worker-{}'.format(i),
-                   args=(args, user_location, account_queue, account_failures, search_items_queue, pause_bit,
+                   args=(args, account_queue, account_failures, search_items_queue, pause_bit,
                          encryption_lib_path, threadStatus[workerId],
                          db_updates_queue, wh_queue))
         t.daemon = True
         t.start()
-                
-        # Create the appropriate type of scheduler to handle the search queue.
-        scheduler = schedulers.SchedulerFactory.get_scheduler(args.scheduler, [search_items_queue], threadStatus, args)
-        scheduler_array.append(scheduler)
 
     # A place to track the current location
-    current_location = False    
+    current_location = False
+
+    # Create the appropriate type of scheduler to handle the search queue.
+    scheduler = schedulers.SchedulerFactory.get_scheduler(args.scheduler, [search_items_queue], threadStatus, args)
 
     # The real work starts here but will halt on pause_bit.set()
     while True:
@@ -359,8 +351,7 @@ def search_overseer_thread(args, user_location, new_location_queue, pause_bit, h
 
         # Wait here while scanning is paused
         while pause_bit.is_set():
-            for i in range(0, len(scheduler_array)):
-                scheduler_array[i].scanning_paused()
+            scheduler.scanning_paused()
             time.sleep(1)
 
         # If a new location has been passed to us, get the most recent one
@@ -371,96 +362,29 @@ def search_overseer_thread(args, user_location, new_location_queue, pause_bit, h
                     current_location = new_location_queue.get_nowait()
             except Empty:
                 pass
-                     
-            locations = _generate_locations(current_location, args.step_limit, args.workers)
-                        
-            for i in range(0, args.workers):
-                scheduler_array[i].location_changed(locations[i])
+            scheduler.location_changed(current_location)
 
         # If there are no search_items_queue either the loop has finished (or been
         # cleared above) -- either way, time to fill it back up
-        for i in range(0, len(search_items_queue_array)):
-            if search_items_queue_array[i].empty():
-                log.debug('Search queue empty, scheduling more items to scan')
-                scheduler_array[i].schedule()
-            # TODO: log the status
-            # else:
-                # nextitem = search_items_queue.queue[0]
-                # threadStatus['Overseer']['message'] = 'Processing search queue, next item is {:6f},{:6f}'.format(nextitem[1][0], nextitem[1][1])
-                # If times are specified, print the time of the next queue item, and how many seconds ahead/behind realtime
-                # if nextitem[2]:
-                    # threadStatus['Overseer']['message'] += ' @ {}'.format(time.strftime('%H:%M:%S', time.localtime(nextitem[2])))
-                    # if nextitem[2] > now():
-                        # threadStatus['Overseer']['message'] += ' ({}s ahead)'.format(nextitem[2] - now())
-                    # else:
-                        # threadStatus['Overseer']['message'] += ' ({}s behind)'.format(now() - nextitem[2])
+        if search_items_queue.empty():
+            log.debug('Search queue empty, scheduling more items to scan')
+            scheduler.schedule()
+        else:
+            nextitem = search_items_queue.queue[0]
+            threadStatus['Overseer']['message'] = 'Processing search queue, next item is {:6f},{:6f}'.format(nextitem[1][0], nextitem[1][1])
+            # If times are specified, print the time of the next queue item, and how many seconds ahead/behind realtime
+            if nextitem[2]:
+                threadStatus['Overseer']['message'] += ' @ {}'.format(time.strftime('%H:%M:%S', time.localtime(nextitem[2])))
+                if nextitem[2] > now():
+                    threadStatus['Overseer']['message'] += ' ({}s ahead)'.format(nextitem[2] - now())
+                else:
+                    threadStatus['Overseer']['message'] += ' ({}s behind)'.format(now() - nextitem[2])
 
         # Now we just give a little pause here
         time.sleep(1)
-        
-# Generates the list of locations to scan
-def _generate_locations(current_location, step_limit, worker_count):
-    NORTH = 0
-    EAST = 90
-    SOUTH = 180
-    WEST = 270
-
-    xdist = math.sqrt(3) * 0.070  # dist between column centers
-    ydist = 0.105       # dist between row centers
-
-    results = []
-
-    results.append((current_location[0], current_location[1], 0))
-    
-    loc = current_location
-    ring = 1
-
-    while len(results) < worker_count:
-
-        loc = get_new_coords(loc, ydist * (step_limit - 1), NORTH)
-        loc = get_new_coords(loc, xdist * (1.5 * step_limit - 0.5), EAST)
-        results.append((loc[0], loc[1], 0))
-
-        for i in range(ring):
-            loc = get_new_coords(loc, ydist * step_limit, NORTH)
-            loc = get_new_coords(loc, xdist * (1.5 * step_limit - 1), WEST)
-            results.append((loc[0], loc[1], 0))
-
-        for i in range(ring):
-            loc = get_new_coords(loc, ydist * (step_limit - 1), SOUTH)
-            loc = get_new_coords(loc, xdist * (1.5 * step_limit - 0.5), WEST)
-            results.append((loc[0], loc[1], 0))
-
-        for i in range(ring):
-            loc = get_new_coords(loc, ydist * (2 * step_limit - 1), SOUTH)
-            loc = get_new_coords(loc, xdist * 0.5, WEST)
-            results.append((loc[0], loc[1], 0))
-            
-        for i in range(ring):
-            loc = get_new_coords(loc, ydist * (step_limit), SOUTH)
-            loc = get_new_coords(loc, xdist * (1.5 * step_limit - 1), EAST)
-            results.append((loc[0], loc[1], 0))
-            
-        for i in range(ring):
-            loc = get_new_coords(loc, ydist * (step_limit - 1), NORTH)
-            loc = get_new_coords(loc, xdist * (1.5 * step_limit - 0.5), EAST)
-            results.append((loc[0], loc[1], 0))
-            
-        # Back to start
-        for i in range(ring - 1):
-            loc = get_new_coords(loc, ydist * (2 * step_limit - 1), NORTH)
-            loc = get_new_coords(loc, xdist * 0.5, EAST)
-            results.append((loc[0], loc[1], 0))
-
-        loc = get_new_coords(loc, ydist * (2 * step_limit - 1), NORTH)
-        loc = get_new_coords(loc, xdist * 0.5, EAST)
-        
-        ring += 1
-
-    return results
 
 
-def search_worker_thread(args, user_location, account_queue, account_failures, search_items_queue, pause_bit, encryption_lib_path, status, dbq, whq):
+def search_worker_thread(args, account_queue, account_failures, search_items_queue, pause_bit, encryption_lib_path, status, dbq, whq):
 
     log.debug('Search worker thread starting')
 
@@ -583,7 +507,7 @@ def search_worker_thread(args, user_location, account_queue, account_failures, s
 
                 # Got the response, parse it out, send todo's to db/wh queues
                 try:
-                    parsed = parse_map(args, response_dict, step_location, user_location, dbq, whq)
+                    parsed = parse_map(args, response_dict, step_location, dbq, whq)
                     search_items_queue.task_done()
                     status[('success' if parsed['count'] > 0 else 'noitems')] += 1
                     consecutive_fails = 0

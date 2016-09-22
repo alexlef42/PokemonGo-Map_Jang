@@ -252,7 +252,11 @@ def worker_status_db_thread(threads_status, name, db_updates_queue):
 
 
 # The main search loop that keeps an eye on the over all process
-def search_overseer_thread(args, user_location, new_location_queue, pause_bit, heartb, encryption_lib_path, db_updates_queue, wh_queue):
+<<<<<<< HEAD
+def search_overseer_thread(args, user_location, new_location_queue, pause_bit, encryption_lib_path, db_updates_queue, wh_queue):
+=======
+def search_overseer_thread(args, new_location_queue, pause_bit, heartb, encryption_lib_path, db_updates_queue, wh_queue):
+>>>>>>> 19b71c6ab4f4b36291a42294dd9c101386282220
 
     log.info('Search overseer starting')
 
