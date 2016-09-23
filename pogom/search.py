@@ -382,7 +382,12 @@ def search_overseer_thread(args, new_location_queue, pause_bit, heartb, encrypti
             except Empty:
                 pass
 
-            locations = _generate_locations(current_location, args.step_limit, len(scheduler_array))
+            step_distance = 0.07
+
+            if args.no_pokemon:
+                step_distance = 0.9
+
+            locations = _generate_locations(current_location, step_distance, args.step_limit, len(scheduler_array))
 
             for i in range(0, len(scheduler_array)):
                 scheduler_array[i].location_changed(locations[i])
@@ -409,14 +414,14 @@ def search_overseer_thread(args, new_location_queue, pause_bit, heartb, encrypti
 
 
 # Generates the list of locations to scan
-def _generate_locations(current_location, step_limit, worker_count):
+def _generate_locations(current_location, step_distance, step_limit, worker_count):
     NORTH = 0
     EAST = 90
     SOUTH = 180
     WEST = 270
 
-    xdist = math.sqrt(3) * 0.070  # dist between column centers
-    ydist = 0.105       # dist between row centers
+    xdist = math.sqrt(3) * step_distance  # dist between column centers
+    ydist = 3 * (step_distance / 2)  # dist between row centers
 
     results = []
 
